@@ -1,29 +1,76 @@
-# sing-box-geosite
+sing-box 规则集转换工具
+本项目是一个用于将多种格式（Surge, Clash, TXT）的过滤规则自动转换并编译为 sing-box 专用二进制规则集（.srs）的自动化工具 。
 
-在links.txt添加规则集，自动生成 sing-box Source Format。fork后自己添加想要转换的规则集。
+🌟 功能特性
+多格式兼容：支持解析 DOMAIN、DOMAIN-SUFFIX、IP-CIDR、GEOIP 等多种规则类型。
 
-仓库 Settings ----> Actions ----> General ----> Workflow permissions ----> Read and write permissions 勾选上
 
-规则集源文件写法eg:
+本地与云端双模式：支持在 Debian/Ubuntu 服务器本地运行，也可通过 GitHub Actions 实现全自动云端转换 。
 
-```json
+二进制编译：自动调用 sing-box 编译器将 JSON 源码编译为高性能的 .srs 文件。
+
+
+自动化环境：本地脚本会自动配置 Python 虚拟环境并安装所需依赖，无需手动干预 。
+
+🛠 Debian 本地使用说明
+此模式适用于在您自己的 Linux 服务器上维护规则，供本地 sing-box 客户端直接读取 。
+
+1. 权限准备
+确保脚本具有执行权限：
+
+Bash
+
+chmod +x update_rules.sh
+2. 执行转换
+使用 sudo 运行脚本，它将自动完成依赖安装、规则抓取及编译：
+
+Bash
+
+sudo ./update_rules.sh
+
+依赖管理：脚本会自动安装 python3-venv 并创建隔离的虚拟环境 。
+
+
+输出路径：转换后的规则默认保存至 /etc/sing-box/rules 目录 。
+
+3. 定时自动维护
+执行 sudo crontab -e，添加以下行（例如每天凌晨 4 点运行）：
+
+Bash
+
+0 4 * * * /path/to/your/update_rules.sh > /dev/null 2>&1
+☁️ GitHub Actions 云端同步
+通过 GitHub Actions，您可以实现规则的云端自动更新并作为远程规则源使用。
+
+1. 开启工作流权限
+前往仓库 Settings -> Actions -> General -> Workflow permissions，勾选 Read and write permissions。
+
+2. 自动化机制
+触发方式：支持代码推送（push）、手动触发（workflow_dispatch）以及定时任务（cron）。
+
+云端环境：工作流会自动安装 sing-box 环境并运行 main.py 进行规则转换。
+
+产出管理：生成的 .srs 和 .json 文件将自动提交并同步回您的 GitHub 仓库。
+
+📝 规则配置指南
+编辑订阅列表 (links.txt)
+在 links.txt 中添加规则源，支持以下两种形式：
+
+远程 URL：例如 https://raw.githubusercontent.com/.../gfw.txt。
+
+本地路径：支持通配符，例如 /mnt/data/rules/*.txt（注：仅在本地运行时有效）。
+
+sing-box 引用示例
+您可以在 sing-box 的配置文件中引用 GitHub 仓库生成的远程规则：
+
+JSON
+
 {
-  "tag": "geosite-wechat",
+  "tag": "my-rule",
   "type": "remote",
-  "format": "source",
-  "url": "https://raw.githubusercontent.com/Toperlock/sing-box-geosite/main/wechat.json",
-  "download_detour": "auto"
+  "format": "binary",
+  "url": "https://raw.githubusercontent.com/您的用户名/仓库名/main/rules/文件名.srs",
+  "download_detour": "proxy"
 }
-```
-
-# 致谢（排名不分先后）
-
-[@izumiChan16](https://github.com/izumiChan16)
-
-[@ifaintad](https://github.com/ifaintad)
-
-[@NobyDa](https://github.com/NobyDa)
-
-[@blackmatrix7](https://github.com/blackmatrix7)
-
-[@DivineEngine](https://github.com/DivineEngine)
+🤝 致谢
+本项目逻辑参考及致谢（排名不分先后）： @izumiChan16 | @ifaintad | @NobyDa | @blackmatrix7 | @DivineEngine

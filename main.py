@@ -1,187 +1,166 @@
-import pandas as pd
-import re
-import concurrent.futures
 import os
 import json
 import requests
 import yaml
 import ipaddress
-from io import StringIO
+import subprocess
+import glob
 
-# 映射字典
-MAP_DICT = {'DOMAIN-SUFFIX': 'domain_suffix', 'HOST-SUFFIX': 'domain_suffix', 'host-suffix': 'domain_suffix', 'DOMAIN': 'domain', 'HOST': 'domain', 'host': 'domain',
-            'DOMAIN-KEYWORD':'domain_keyword', 'HOST-KEYWORD': 'domain_keyword', 'host-keyword': 'domain_keyword', 'IP-CIDR': 'ip_cidr',
-            'ip-cidr': 'ip_cidr', 'IP-CIDR6': 'ip_cidr', 
-            'IP6-CIDR': 'ip_cidr','SRC-IP-CIDR': 'source_ip_cidr', 'GEOIP': 'geoip', 'DST-PORT': 'port',
-            'SRC-PORT': 'source_port', "URL-REGEX": "domain_regex", "DOMAIN-REGEX": "domain_regex"}
+# 核心映射字典
+MAP_DICT = {
+    'DOMAIN-SUFFIX': 'domain_suffix',
+    'DOMAIN': 'domain',
+    'DOMAIN-KEYWORD': 'domain_keyword',
+    'IP-CIDR': 'ip_cidr',
+    'IP-CIDR6': 'ip_cidr',
+    'SRC-IP-CIDR': 'source_ip_cidr',
+    'GEOIP': 'geoip',
+    'DST-PORT': 'port',
+    'SRC-PORT': 'source_port',
+    'DOMAIN-REGEX': 'domain_regex'
+}
 
-def read_yaml_from_url(url):
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    yaml_data = yaml.safe_load(response.text)
-    return yaml_data
+# --- 路径配置 ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LINKS_FILE = os.path.join(BASE_DIR, "links.txt")
 
-def read_list_from_url(url):
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        csv_data = StringIO(response.text)
-        df = pd.read_csv(csv_data, header=None, names=['pattern', 'address', 'other', 'other2', 'other3'], on_bad_lines='skip')
-    else:
-        return None
-    filtered_rows = []
-    rules = []
-    # 处理逻辑规则
-    if 'AND' in df['pattern'].values:
-        and_rows = df[df['pattern'].str.contains('AND', na=False)]
-        for _, row in and_rows.iterrows():
-            rule = {
-                "type": "logical",
-                "mode": "and",
-                "rules": []
-            }
-            pattern = ",".join(row.values.astype(str))
-            components = re.findall(r'\((.*?)\)', pattern)
-            for component in components:
-                for keyword in MAP_DICT.keys():
-                    if keyword in component:
-                        match = re.search(f'{keyword},(.*)', component)
-                        if match:
-                            value = match.group(1)
-                            rule["rules"].append({
-                                MAP_DICT[keyword]: value
-                            })
-            rules.append(rule)
-    for index, row in df.iterrows():
-        if 'AND' not in row['pattern']:
-            filtered_rows.append(row)
-    df_filtered = pd.DataFrame(filtered_rows, columns=['pattern', 'address', 'other', 'other2', 'other3'])
-    return df_filtered, rules
+# 自动判断输出目录：如果是 GitHub Actions 环境则输出到当前目录的 rules，否则输出到系统目录
+if os.environ.get('GITHUB_ACTIONS') == 'true':
+    OUTPUT_DIR = os.path.join(BASE_DIR, "rules")
+else:
+    OUTPUT_DIR = "/etc/sing-box/rules"
 
 def is_ipv4_or_ipv6(address):
+    """验证是否为合法 IP 格式"""
     try:
-        ipaddress.IPv4Network(address)
-        return 'ipv4'
+        ipaddress.ip_network(address, strict=False)
+        return True
     except ValueError:
+        return False
+
+def get_content(path):
+    """兼容远程 URL 和本地绝对路径"""
+    if path.startswith(('http://', 'https://')):
+        headers = {'User-Agent': 'Mozilla/5.0'}
         try:
-            ipaddress.IPv6Network(address)
-            return 'ipv6'
-        except ValueError:
+            response = requests.get(path, headers=headers, timeout=15)
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            print(f"  ❌ 网络抓取失败: {e}")
             return None
-
-def parse_and_convert_to_dataframe(link):
-    rules = []
-    # 根据链接扩展名分情况处理
-    if link.endswith('.yaml') or link.endswith('.txt'):
+    elif os.path.exists(path):
         try:
-            yaml_data = read_yaml_from_url(link)
-            rows = []
-            if not isinstance(yaml_data, str):
-                items = yaml_data.get('payload', [])
-            else:
-                lines = yaml_data.splitlines()
-                line_content = lines[0]
-                items = line_content.split()
-            for item in items:
-                address = item.strip("'")
-                if ',' not in item:
-                    if is_ipv4_or_ipv6(item):
-                        pattern = 'IP-CIDR'
-                    else:
-                        if address.startswith('+') or address.startswith('.'):
-                            pattern = 'DOMAIN-SUFFIX'
-                            address = address[1:]
-                            if address.startswith('.'):
-                                address = address[1:]
-                        else:
-                            pattern = 'DOMAIN'
-                else:
-                    pattern, address = item.split(',', 1)
-                if ',' in address:
-                    address = address.split(',', 1)[0]
-                rows.append({'pattern': pattern.strip(), 'address': address.strip(), 'other': None})
-            df = pd.DataFrame(rows, columns=['pattern', 'address', 'other'])
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            print(f"  ❌ 本地读取失败: {e}")
+            return None
+    return None
+
+def parse_rules(content, path):
+    rules_data = {v: set() for v in MAP_DICT.values()}
+    
+    if path.endswith(('.yaml', '.yml')) or 'payload:' in content:
+        try:
+            data = yaml.safe_load(content)
+            items = data.get('payload', []) if isinstance(data, dict) else content.splitlines()
         except:
-            df, rules = read_list_from_url(link)
+            items = content.splitlines()
     else:
-        df, rules = read_list_from_url(link)
-    return df, rules
+        items = content.splitlines()
 
-# 对字典进行排序，含list of dict
-def sort_dict(obj):
-    if isinstance(obj, dict):
-        return {k: sort_dict(obj[k]) for k in sorted(obj)}
-    elif isinstance(obj, list) and all(isinstance(elem, dict) for elem in obj):
-        return sorted([sort_dict(x) for x in obj], key=lambda d: sorted(d.keys())[0])
-    elif isinstance(obj, list):
-        return sorted(sort_dict(x) for x in obj)
-    else:
-        return obj
-
-def parse_list_file(link, output_directory):
-    try:
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            results= list(executor.map(parse_and_convert_to_dataframe, [link]))  # 使用executor.map并行处理链接, 得到(df, rules)元组的列表
-            dfs = [df for df, rules in results]   # 提取df的内容
-            rules_list = [rules for df, rules in results]  # 提取逻辑规则rules的内容
-            df = pd.concat(dfs, ignore_index=True)  # 拼接为一个DataFrame
-        df = df[~df['pattern'].str.contains('#')].reset_index(drop=True)  # 删除pattern中包含#号的行
-        df = df[df['pattern'].isin(MAP_DICT.keys())].reset_index(drop=True)  # 删除不在字典中的pattern
-        df = df.drop_duplicates().reset_index(drop=True)  # 删除重复行
-        df['pattern'] = df['pattern'].replace(MAP_DICT)  # 替换pattern为字典中的值
-        os.makedirs(output_directory, exist_ok=True)  # 创建自定义文件夹
-
-        result_rules = {"version": 2, "rules": []}
-        domain_entries = []
-        for pattern, addresses in df.groupby('pattern')['address'].apply(list).to_dict().items():
-            if pattern == 'domain_suffix':
-                rule_entry = {pattern: [address.strip() for address in addresses]}
-                result_rules["rules"].append(rule_entry)
-                # domain_entries.extend([address.strip() for address in addresses])  # 1.9以下的版本需要额外处理 domain_suffix
-            elif pattern == 'domain':
-                domain_entries.extend([address.strip() for address in addresses])
+    for line in items:
+        line = line.strip().strip('"').strip("'").strip(',')
+        if not line or line.startswith(('#', '//', ';')):
+            continue
+        
+        parts = line.split(',')
+        if len(parts) >= 2:
+            raw_type = parts[0].strip().upper().replace('HOST', 'DOMAIN')
+            val = parts[1].strip().strip('"').strip("'")
+        else:
+            val = parts[0].strip().strip('"').strip("'")
+            if is_ipv4_or_ipv6(val):
+                raw_type = 'IP-CIDR'
+            elif val.startswith('.'):
+                raw_type = 'DOMAIN-SUFFIX'
+                val = val[1:]
+            elif val.startswith('+.'):
+                raw_type = 'DOMAIN-SUFFIX'
+                val = val[2:]
+            elif val.startswith('*.'):
+                raw_type = 'DOMAIN-SUFFIX'
+                val = val[2:]
             else:
-                rule_entry = {pattern: [address.strip() for address in addresses]}
-                result_rules["rules"].append(rule_entry)
-        # 删除 'domain_entries' 中的重复值
-        domain_entries = list(set(domain_entries))
-        if domain_entries:
-            result_rules["rules"].insert(0, {'domain': domain_entries})
+                raw_type = 'DOMAIN'
 
-        # 处理逻辑规则
-        """
-        if rules_list[0] != "[]":
-            result_rules["rules"].extend(rules_list[0])
-        """
+        target_type = MAP_DICT.get(raw_type)
+        if target_type in rules_data:
+            rules_data[target_type].add(val)
 
-        # 使用 output_directory 拼接完整路径
-        file_name = os.path.join(output_directory, f"{os.path.basename(link).split('.')[0]}.json")
-        with open(file_name, 'w', encoding='utf-8') as output_file:
-            result_rules_str = json.dumps(sort_dict(result_rules), ensure_ascii=False, indent=2)
-            result_rules_str = result_rules_str.replace('\\\\', '\\')
-            output_file.write(result_rules_str)
+    return rules_data
 
-        srs_path = file_name.replace(".json", ".srs")
-        os.system(f"sing-box rule-set compile --output {srs_path} {file_name}")
-        return file_name
-    except Exception as e:
-        print(f'获取链接出错，已跳过：{link}，原因：{str(e)}')
-        pass
+def main():
+    if not os.path.exists(LINKS_FILE):
+        print(f"❌ 找不到 {LINKS_FILE}")
+        return
 
-# 读取 links.txt 中的每个链接并生成对应的 JSON 文件
-with open("../links.txt", 'r') as links_file:
-    links = links_file.read().splitlines()
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-links = [l for l in links if l.strip() and not l.strip().startswith("#")]
+    with open(LINKS_FILE, 'r') as f:
+        raw_links = []
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'): continue
+            raw_links.append(line.split(' ')[-1])
 
-output_dir = "./"
-result_file_names = []
+    expanded_links = []
+    for path in raw_links:
+        if '*' in path:
+            full_glob_path = os.path.join(BASE_DIR, path) if not os.path.isabs(path) else path
+            files = glob.glob(full_glob_path)
+            if files:
+                expanded_links.extend(files)
+            else:
+                print(f"⚠️ 未找到匹配通配符的文件: {path}")
+        else:
+            expanded_links.append(path)
 
-for link in links:
-    result_file_name = parse_list_file(link, output_directory=output_dir)
-    result_file_names.append(result_file_name)
+    for url_or_path in expanded_links:
+        name = os.path.basename(url_or_path).split('.')[0]
+        print(f"➡️ 正在处理: {name}")
+        
+        content = get_content(url_or_path)
+        if content:
+            rules_data = parse_rules(content, url_or_path)
+            
+            final_json = {"version": 2, "rules": []}
+            
+            combined_rule = {}
+            for key in sorted(rules_data.keys()):
+                values = rules_data[key]
+                if values:
+                    combined_rule[key] = sorted(list(values))
+            
+            if combined_rule:
+                final_json["rules"].append(combined_rule)
 
-# 打印生成的文件名
-# for file_name in result_file_names:
-    # print(file_name)
+            json_path = os.path.join(OUTPUT_DIR, f"{name}.json")
+            srs_path = os.path.join(OUTPUT_DIR, f"{name}.srs")
+
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(final_json, f, indent=2, ensure_ascii=False)
+
+            try:
+                subprocess.run(
+                    ["sing-box", "rule-set", "compile", "--output", srs_path, json_path],
+                    check=True,
+                    capture_output=True
+                )
+                print(f"  ✅ 成功生成: {name}.srs")
+            except Exception as e:
+                print(f"  ❌ 编译失败: {name}")
+
+if __name__ == "__main__":
+    main()

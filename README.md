@@ -1,24 +1,35 @@
-Sing-box Rule-set Generator
-这是一个基于 Python 的自动规则转换工具，专为 sing-box 设计。它可以抓取远程链接或读取本地文本规则，并自动编译为高性能的二进制规则集 (.srs)。
+<div align="center">
 
-✨ 功能特性
-智能解析：自动识别 DOMAIN, DOMAIN-SUFFIX, IP-CIDR 等常见代理规则格式。
+# 🛠️ Sing-box Rule-set Generator
 
-环境自适应：
+**一个高性能、自动化的 sing-box 规则集编译工具**
 
-GitHub Actions: 结果输出至 ./rules。
+[![Auto Sync](https://img.shields.io/github/actions/workflow/status/libre0404/sing-box-geosite/sync.yml?style=flat-square&logo=github-actions&logoColor=white&label=Auto%20Update)](https://github.com/libre0404/sing-box-geosite/actions)
+[![Last Update](https://img.shields.io/github/last-commit/libre0404/sing-box-geosite?style=flat-square&logo=git&label=Last%20Update)](https://github.com/libre0404/sing-box-geosite/commits/main)
+[![License](https://img.shields.io/github/license/libre0404/sing-box-geosite?style=flat-square&color=blue&label=License)](LICENSE)
 
-本地 Debian: 结果自动同步至 /etc/sing-box/rules。
+[功能特性](#-功能特性) • [使用方法](#-使用方法-sing-box-远程引用) • [目录结构](#-目录结构) • [本地部署](#️-本地部署-debianubuntu)
 
-高性能编译：利用 sing-box 官方工具链，生成加载速度极快的二进制 .srs 文件。
+</div>
 
-自动化同步：通过 GitHub Actions 每天定时更新规则，确保数据始终保持最新。
+---
 
-🛠️ 使用方法 (sing-box 远程引用)
-您可以直接在 sing-box 配置文件（如 config.json）中引用本项目生成的二进制文件：
+## 🚀 功能特性
 
-JSON
+- **✨ 智能解析**：自动识别并转换 `DOMAIN`, `DOMAIN-SUFFIX`, `IP-CIDR` 等主流代理规则格式。
+- **🌍 环境自适应**：
+    - **GitHub Actions**: 自动输出至 `./rules` 目录。
+    - **Debian 本地**: 自动同步至 `/etc/sing-box/rules`，无缝对接系统服务。
+- **⚡ 二进制编译**：调用官方工具链生成 `.srs` 文件，大幅提升 sing-box 加载与匹配效率。
+- **📅 自动化同步**：预设 GitHub Actions 工作流，每日定时更新，告警失效规则。
 
+---
+
+## 🛠️ 使用方法 (sing-box 远程引用)
+
+在你的 sing-box `config.json` 中，通过 `remote` 方式引用生成的二进制文件：
+
+```jsonc
 {
   "route": {
     "rule_set": [
@@ -26,20 +37,20 @@ JSON
         "tag": "gfw",
         "type": "remote",
         "format": "binary",
-        "url": "https://raw.githubusercontent.com/libre0404/sing-box-geosite/main/rules/gfw.srs",
+        "url": "[https://raw.githubusercontent.com/libre0404/sing-box-geosite/main/rules/gfw.srs](https://raw.githubusercontent.com/libre0404/sing-box-geosite/main/rules/gfw.srs)",
         "download_detour": "proxy"
       },
       {
         "tag": "adblock",
         "type": "remote",
         "format": "binary",
-        "url": "https://raw.githubusercontent.com/libre0404/sing-box-geosite/main/rules/adblock_reject_domain.srs",
+        "url": "[https://raw.githubusercontent.com/libre0404/sing-box-geosite/main/rules/adblock_reject_domain.srs](https://raw.githubusercontent.com/libre0404/sing-box-geosite/main/rules/adblock_reject_domain.srs)",
         "download_detour": "proxy"
       }
     ]
   }
 }
-📂 目录结构
+# 📂 目录结构
 Bash
 
 .
@@ -70,4 +81,9 @@ chmod +x update_rules.sh
 
 规则仓库: libre0404/sing-box-geosite
 
-根据fork项目修改自用，使用者请遵守原作者相关使用协议要求。
+📜 免责声明与协议
+本项目系根据其他项目修改而来的自用版本。
+
+使用者请务必遵守原作者的相关使用协议要求。
+
+本项目仅供技术交流与学习使用。

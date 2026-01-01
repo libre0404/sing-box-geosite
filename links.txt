@@ -1,3 +1,4 @@
+https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/gfw.txt
 https://raw.githubusercontent.com/NobyDa/Script/master/QuantumultX/Bilibili.list
 https://raw.githubusercontent.com/NobyDa/Script/master/Surge/WeChat.list
 https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Microsoft/Microsoft.list
@@ -11,4 +12,6 @@ https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Quant
 https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/OpenAI/OpenAI.yaml
 https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleMusic/AppleMusic.yaml
 https://adrules.top/adrules_domainset.txt
-https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/gfw.txt
+https://gh-proxy.org/https://raw.githubusercontent.com/REIJI007/AdBlock_Rule_For_Sing-box/main/adblock_reject_domain.txt
+# 使用相对路径，本地搭建可改为绝对路径#/etc/sing-box/local_rules /*.txt
+./local_rules /*.txt

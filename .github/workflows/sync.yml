@@ -30,6 +30,8 @@ jobs:
         pip install pandas requests pyyaml
     - name: Download content
       run: |
+        mkdir -p ./rules
+        mkdir -p ./local_rules    
         URL="https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/BaseFilter/sections/adservers.txt"
         OUTPUT_FILE="./rules/adservers.txt"
 
@@ -45,10 +47,7 @@ jobs:
       run: |
         sing-box rule-set convert --type adguard --output ./rules/adservers.srs ./rules/adservers.txt
     - name: Run script
-      run: |
-        mkdir -p ./rules
-        mkdir -p ./local_rules     
-        python ../main.py
+      run: python ../main.py
       working-directory: ./rules/
     - name: Commit and push config.json
       run: |

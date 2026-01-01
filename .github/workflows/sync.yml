@@ -31,7 +31,7 @@ jobs:
     - name: Download content
       run: |
         URL="https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/BaseFilter/sections/adservers.txt"
-        OUTPUT_FILE="./rule/adservers.txt"
+        OUTPUT_FILE="./rules/adservers.txt"
 
         curl -L $URL -o $OUTPUT_FILE
 
@@ -43,17 +43,21 @@ jobs:
         fi
     - name: Convert AdGuard DNS Filter to sing-box rule set
       run: |
-        sing-box rule-set convert --type adguard --output ./rule/adservers.srs ./rule/adservers.txt
+        sing-box rule-set convert --type adguard --output ./rules/adservers.srs ./rules/adservers.txt
     - name: Run script
+      # 创建 rules 文件夹以存储生成的文件
+      mkdir -p ./rules
+      # 确保 local_rules 文件夹存在（如果你有本地规则文件）
+      mkdir -p ./local_rules     
       run: python ../main.py
-      working-directory: ./rule/
+      working-directory: ./rules/
     - name: Commit and push config.json
       run: |
         git config --global user.email "action@github.com"
         git config --global user.name "GitHub Action"
-        git add ./rule/*.json
-        git add ./rule/*.srs
-        git add ./rule/*.txt
+        git add ./rules/*.json
+        git add ./rules/*.srs
+        git add ./rules/*.txt
 
         # 检查是否有文件被修改
         if git diff --staged --quiet; then

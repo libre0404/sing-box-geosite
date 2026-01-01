@@ -50,8 +50,10 @@
     ]
   }
 }
+```
+
 # 📂 目录结构
-Bash
+## Bash
 
 .
 ├── main.py           # 转换核心脚本 (支持去重与格式转换)
@@ -59,7 +61,8 @@ Bash
 ├── local_rules/      # 存放手动上传的自定义规则文本 (*.txt)
 ├── rules/            # [自动生成] 存放 .json 和 .srs 规则文件
 └── update_rules.sh   # 本地环境一键更新脚本
-⚙️ 本地部署 (Debian/Ubuntu)
+```
+# ##⚙️ 本地部署 (Debian/Ubuntu)##
 如果您希望在自己的服务器上运行转换逻辑：
 
 环境准备：

@@ -46,9 +46,9 @@ jobs:
         sing-box rule-set convert --type adguard --output ./rules/adservers.srs ./rules/adservers.txt
     - name: Run script
       # 创建 rules 文件夹以存储生成的文件
-      mkdir -p ./rules
+      run: mkdir -p ./rules
       # 确保 local_rules 文件夹存在（如果你有本地规则文件）
-      mkdir -p ./local_rules     
+      run: mkdir -p ./local_rules     
       run: python ../main.py
       working-directory: ./rules/
     - name: Commit and push config.json
